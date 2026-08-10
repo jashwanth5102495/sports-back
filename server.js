@@ -1,6 +1,6 @@
 const express = require('express');
 const { Sequelize, DataTypes, Op } = require('sequelize');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, CreateBucketCommand, PutBucketPolicyCommand, HeadBucketCommand } = require('@aws-sdk/client-s3');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const helmet = require('helmet');
@@ -58,6 +58,45 @@ const s3 = new S3Client({
 
 const MINIO_BUCKET = process.env.MINIO_BUCKET || 'sports-images';
 const MINIO_PUBLIC_URL = process.env.MINIO_PUBLIC_URL || process.env.MINIO_ENDPOINT;
+
+// Automatically make the bucket public on startup so the frontend can read the images!
+async function ensureBucketExistsAndPublic() {
+  if (!process.env.MINIO_ENDPOINT) return; // Skip if MinIO not configured
+  
+  try {
+    // Check if bucket exists, if not create it
+    try {
+      await s3.send(new HeadBucketCommand({ Bucket: MINIO_BUCKET }));
+    } catch (err) {
+      if (err.name === 'NotFound') {
+        await s3.send(new CreateBucketCommand({ Bucket: MINIO_BUCKET }));
+        console.log(`Created bucket: ${MINIO_BUCKET}`);
+      }
+    }
+
+    // Set bucket policy to public read
+    const policy = {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "PublicReadGetObject",
+          Effect: "Allow",
+          Principal: "*",
+          Action: "s3:GetObject",
+          Resource: `arn:aws:s3:::${MINIO_BUCKET}/*`
+        }
+      ]
+    };
+    
+    await s3.send(new PutBucketPolicyCommand({
+      Bucket: MINIO_BUCKET,
+      Policy: JSON.stringify(policy)
+    }));
+    console.log(`Bucket ${MINIO_BUCKET} is now PUBLIC.`);
+  } catch (err) {
+    console.error("Warning: Failed to configure bucket policy automatically:", err.message);
+  }
+}
 
 async function uploadBase64ToS3(base64String, prefix = 'image') {
   // If it's not a base64 string, just return it (might already be a URL or empty)
@@ -135,28 +174,35 @@ const Visitor = sequelize.define('Visitor', {
   timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
 });
 
-// Initialize default admin
-async function initializeAdmin() {
-  try {
-    const adminExists = await AdminUser.findOne({ where: { username: 'admin' } });
-    if (!adminExists) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      await AdminUser.create({ username: 'admin', password: hashedPassword });
-      console.log('Default admin user created.');
+// Initialize default admin and server
+async function startServer() {
+  if (process.env.DATABASE_URL) {
+    try {
+      await sequelize.sync({ alter: true });
+      console.log('Database connected and synced');
+      
+      // Seed initial admin user if not exists
+      const adminCount = await AdminUser.count();
+      if (adminCount === 0) {
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        await AdminUser.create({ username: 'admin', password: hashedPassword });
+        console.log('Default admin user created (admin / admin123)');
+      }
+    } catch (err) {
+      console.error('Error syncing database:', err);
     }
-  } catch (err) {
-    console.error('Error initializing admin user:', err);
   }
-}
 
-if (process.env.DATABASE_URL) {
-  sequelize.sync({ alter: true }).then(() => {
-    console.log('Database synced');
-    initializeAdmin();
-  }).catch(err => {
-    console.error('Error syncing database:', err);
+  // Configure MinIO Bucket automatically
+  await ensureBucketExistsAndPublic();
+
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
   });
 }
+
+// Start the server
+startServer();
 
 // Routes
 // Public Routes
@@ -296,6 +342,4 @@ app.get('/', (req, res) => {
   res.send('Sports Backend API is running securely with PostgreSQL.');
 });
 
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+
