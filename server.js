@@ -162,6 +162,14 @@ const Event = sequelize.define('Event', {
   image: DataTypes.TEXT,
 });
 
+const Message = sequelize.define('Message', {
+  firstName: DataTypes.STRING,
+  lastName: DataTypes.STRING,
+  email: DataTypes.STRING,
+  phone: DataTypes.STRING,
+  message: DataTypes.TEXT,
+});
+
 const CustomImage = sequelize.define('CustomImage', {
   title: DataTypes.STRING,
   base64Data: DataTypes.TEXT,
@@ -245,6 +253,15 @@ app.post('/api/track', async (req, res) => {
   }
 });
 
+app.post('/api/messages', async (req, res) => {
+  try {
+    const newMessage = await Message.create(req.body);
+    res.status(201).json(newMessage);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Protected Content Routes
 app.post('/api/updates', authenticateToken, async (req, res) => {
   try {
@@ -295,6 +312,26 @@ app.delete('/api/events/:id', authenticateToken, async (req, res) => {
 
     await event.destroy();
     res.status(200).json({ success: true, message: 'Event deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/messages', authenticateToken, async (req, res) => {
+  try {
+    const messages = await Message.findAll({ order: [['createdAt', 'DESC']] });
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
+  try {
+    const message = await Message.findByPk(req.params.id);
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    await message.destroy();
+    res.status(200).json({ success: true, message: 'Message deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
