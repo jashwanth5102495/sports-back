@@ -272,6 +272,34 @@ app.post('/api/events', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/events/:id', authenticateToken, async (req, res) => {
+  try {
+    const event = await Event.findByPk(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+
+    // Try to delete from MinIO if it's an S3 URL
+    if (event.image && event.image.includes(MINIO_BUCKET)) {
+      try {
+        const parts = event.image.split('/');
+        const fileName = parts[parts.length - 1];
+        
+        await s3.send(new DeleteObjectCommand({
+          Bucket: MINIO_BUCKET,
+          Key: fileName
+        }));
+        console.log(`Deleted ${fileName} from MinIO`);
+      } catch (s3Err) {
+        console.error('Failed to delete from MinIO:', s3Err);
+      }
+    }
+
+    await event.destroy();
+    res.status(200).json({ success: true, message: 'Event deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/images', authenticateToken, async (req, res) => {
   try {
     const payload = { ...req.body };
