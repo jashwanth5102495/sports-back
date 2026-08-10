@@ -1,6 +1,6 @@
 const express = require('express');
 const { Sequelize, DataTypes, Op } = require('sequelize');
-const { S3Client, PutObjectCommand, CreateBucketCommand, PutBucketPolicyCommand, HeadBucketCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, CreateBucketCommand, PutBucketPolicyCommand, HeadBucketCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const helmet = require('helmet');
@@ -274,6 +274,35 @@ app.post('/api/images', authenticateToken, async (req, res) => {
     }
     const newImage = await CustomImage.create(payload);
     res.status(201).json(newImage);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/images/:id', authenticateToken, async (req, res) => {
+  try {
+    const image = await CustomImage.findByPk(req.params.id);
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+
+    // Try to delete from MinIO if it's an S3 URL
+    if (image.base64Data && image.base64Data.includes(MINIO_BUCKET)) {
+      try {
+        // Extract filename from URL (e.g. https://domain.com/bucket/filename.jpg -> filename.jpg)
+        const parts = image.base64Data.split('/');
+        const fileName = parts[parts.length - 1];
+        
+        await s3.send(new DeleteObjectCommand({
+          Bucket: MINIO_BUCKET,
+          Key: fileName
+        }));
+        console.log(`Deleted ${fileName} from MinIO`);
+      } catch (s3Err) {
+        console.error('Failed to delete from MinIO:', s3Err);
+      }
+    }
+
+    await image.destroy();
+    res.status(200).json({ success: true, message: 'Image deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
