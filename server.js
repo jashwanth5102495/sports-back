@@ -1,5 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { Sequelize, DataTypes, Op } = require('sequelize');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const helmet = require('helmet');
@@ -44,49 +45,100 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// MinIO / S3 Configuration
+const s3 = new S3Client({
+  endpoint: process.env.MINIO_ENDPOINT, 
+  region: process.env.MINIO_REGION || 'us-east-1',
+  credentials: {
+    accessKeyId: process.env.MINIO_ACCESS_KEY,
+    secretAccessKey: process.env.MINIO_SECRET_KEY,
+  },
+  forcePathStyle: true, // Required for MinIO
+});
+
+const MINIO_BUCKET = process.env.MINIO_BUCKET || 'sports-images';
+const MINIO_PUBLIC_URL = process.env.MINIO_PUBLIC_URL || process.env.MINIO_ENDPOINT;
+
+async function uploadBase64ToS3(base64String, prefix = 'image') {
+  // If it's not a base64 string, just return it (might already be a URL or empty)
+  if (!base64String || !base64String.startsWith('data:image')) {
+    return base64String;
+  }
+
+  const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error('Invalid base64 string format');
+  }
+
+  const mimeType = matches[1];
+  const buffer = Buffer.from(matches[2], 'base64');
+  const extension = mimeType.split('/')[1];
+  const fileName = `${prefix}-${Date.now()}.${extension}`;
+
+  const command = new PutObjectCommand({
+    Bucket: MINIO_BUCKET,
+    Key: fileName,
+    Body: buffer,
+    ContentType: mimeType,
+  });
+
+  await s3.send(command);
+  return `${MINIO_PUBLIC_URL}/${MINIO_BUCKET}/${fileName}`;
+}
+
 // Database Connection
-const MONGODB_URI = process.env.MONGODB_URI;
-if (!MONGODB_URI) {
-  console.warn('WARNING: MONGODB_URI is not defined. Database will not connect.');
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://dummy:dummy@localhost:5432/dummy';
+
+const sequelize = new Sequelize(DATABASE_URL, {
+  dialect: 'postgres',
+  logging: false,
+  dialectOptions: {
+    ssl: process.env.NODE_ENV === 'production' ? { require: true, rejectUnauthorized: false } : false
+  }
+});
+
+if (!process.env.DATABASE_URL) {
+  console.warn('WARNING: DATABASE_URL is not defined in .env. Database will fail to connect.');
 } else {
-  mongoose.connect(MONGODB_URI)
-    .then(() => console.log('Connected to MongoDB'))
-    .catch((err) => console.error('MongoDB connection error:', err));
+  sequelize.authenticate()
+    .then(() => console.log('Connected to PostgreSQL'))
+    .catch((err) => console.error('PostgreSQL connection error:', err));
 }
 
 // Models
-const updateSchema = new mongoose.Schema({
-  title: String,
-  date: String,
-  category: String,
-  excerpt: String,
-  image: String,
-  createdAt: { type: Date, default: Date.now }
+const Update = sequelize.define('Update', {
+  title: DataTypes.STRING,
+  date: DataTypes.STRING,
+  category: DataTypes.STRING,
+  excerpt: DataTypes.TEXT,
+  image: DataTypes.TEXT,
 });
-const Update = mongoose.models.Update || mongoose.model('Update', updateSchema);
 
-const imageSchema = new mongoose.Schema({
-  title: String,
-  base64Data: String,
-  createdAt: { type: Date, default: Date.now }
+const Event = sequelize.define('Event', {
+  title: DataTypes.STRING,
+  date: DataTypes.STRING,
+  description: DataTypes.TEXT,
+  image: DataTypes.TEXT,
 });
-const CustomImage = mongoose.models.CustomImage || mongoose.model('CustomImage', imageSchema);
 
-const adminUserSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true }
+const CustomImage = sequelize.define('CustomImage', {
+  title: DataTypes.STRING,
+  base64Data: DataTypes.TEXT,
 });
-const AdminUser = mongoose.models.AdminUser || mongoose.model('AdminUser', adminUserSchema);
 
-const visitorSchema = new mongoose.Schema({
-  timestamp: { type: Date, default: Date.now }
+const AdminUser = sequelize.define('AdminUser', {
+  username: { type: DataTypes.STRING, unique: true, allowNull: false },
+  password: { type: DataTypes.STRING, allowNull: false },
 });
-const Visitor = mongoose.models.Visitor || mongoose.model('Visitor', visitorSchema);
+
+const Visitor = sequelize.define('Visitor', {
+  timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
+});
 
 // Initialize default admin
 async function initializeAdmin() {
   try {
-    const adminExists = await AdminUser.findOne({ username: 'admin' });
+    const adminExists = await AdminUser.findOne({ where: { username: 'admin' } });
     if (!adminExists) {
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await AdminUser.create({ username: 'admin', password: hashedPassword });
@@ -96,9 +148,13 @@ async function initializeAdmin() {
     console.error('Error initializing admin user:', err);
   }
 }
-if (MONGODB_URI) {
-  mongoose.connection.once('open', () => {
+
+if (process.env.DATABASE_URL) {
+  sequelize.sync({ alter: true }).then(() => {
+    console.log('Database synced');
     initializeAdmin();
+  }).catch(err => {
+    console.error('Error syncing database:', err);
   });
 }
 
@@ -106,8 +162,17 @@ if (MONGODB_URI) {
 // Public Routes
 app.get('/api/updates', async (req, res) => {
   try {
-    const updates = await Update.find({}).sort({ createdAt: -1 });
+    const updates = await Update.findAll({ order: [['createdAt', 'DESC']] });
     res.status(200).json(updates);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/events', async (req, res) => {
+  try {
+    const events = await Event.findAll({ order: [['createdAt', 'DESC']] });
+    res.status(200).json(events);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -115,7 +180,7 @@ app.get('/api/updates', async (req, res) => {
 
 app.get('/api/images', async (req, res) => {
   try {
-    const images = await CustomImage.find({}).sort({ createdAt: -1 });
+    const images = await CustomImage.findAll({ order: [['createdAt', 'DESC']] });
     res.status(200).json(images);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -142,9 +207,26 @@ app.post('/api/updates', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/events', authenticateToken, async (req, res) => {
+  try {
+    const payload = { ...req.body };
+    if (payload.image) {
+      payload.image = await uploadBase64ToS3(payload.image, 'event');
+    }
+    const newEvent = await Event.create(payload);
+    res.status(201).json(newEvent);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/images', authenticateToken, async (req, res) => {
   try {
-    const newImage = await CustomImage.create(req.body);
+    const payload = { ...req.body };
+    if (payload.base64Data) {
+      payload.base64Data = await uploadBase64ToS3(payload.base64Data, 'gallery');
+    }
+    const newImage = await CustomImage.create(payload);
     res.status(201).json(newImage);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -154,17 +236,19 @@ app.post('/api/images', authenticateToken, async (req, res) => {
 app.get('/api/analytics', authenticateToken, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    const query = {};
+    const where = {};
+    
     if (startDate || endDate) {
-      query.timestamp = {};
-      if (startDate) query.timestamp.$gte = new Date(startDate);
+      where.timestamp = {};
+      if (startDate) where.timestamp[Op.gte] = new Date(startDate);
       if (endDate) {
         let end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        query.timestamp.$lte = end;
+        where.timestamp[Op.lte] = end;
       }
     }
-    const visitors = await Visitor.find(query).sort({ timestamp: -1 });
+    
+    const visitors = await Visitor.findAll({ where, order: [['timestamp', 'DESC']] });
     res.status(200).json({ count: visitors.length, data: visitors });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -175,13 +259,13 @@ app.get('/api/analytics', authenticateToken, async (req, res) => {
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password } = req.body;
   try {
-    const user = await AdminUser.findOne({ username });
+    const user = await AdminUser.findOne({ where: { username } });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
     
-    const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: '12h' });
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '12h' });
     res.status(200).json({ success: true, token, message: 'Logged in' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -191,7 +275,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
   const { username, oldPassword, newPassword } = req.body;
   try {
-    const user = await AdminUser.findOne({ username });
+    const user = await AdminUser.findOne({ where: { username } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
@@ -209,7 +293,7 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
 
 // Health check endpoint
 app.get('/', (req, res) => {
-  res.send('Sports Backend API is running securely.');
+  res.send('Sports Backend API is running securely with PostgreSQL.');
 });
 
 app.listen(PORT, () => {
