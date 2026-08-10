@@ -248,7 +248,11 @@ app.post('/api/track', async (req, res) => {
 // Protected Content Routes
 app.post('/api/updates', authenticateToken, async (req, res) => {
   try {
-    const newUpdate = await Update.create(req.body);
+    const payload = { ...req.body };
+    if (payload.image) {
+      payload.image = await uploadBase64ToS3(payload.image, 'news');
+    }
+    const newUpdate = await Update.create(payload);
     res.status(201).json(newUpdate);
   } catch (error) {
     res.status(500).json({ error: error.message });
