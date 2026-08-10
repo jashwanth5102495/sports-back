@@ -47,17 +47,17 @@ const authenticateToken = (req, res, next) => {
 
 // MinIO / S3 Configuration
 const s3 = new S3Client({
-  endpoint: process.env.MINIO_ENDPOINT, 
+  endpoint: process.env.MINIO_ENDPOINT || 'https://minio-production-b44d.up.railway.app', 
   region: process.env.MINIO_REGION || 'us-east-1',
   credentials: {
-    accessKeyId: process.env.MINIO_ACCESS_KEY,
-    secretAccessKey: process.env.MINIO_SECRET_KEY,
+    accessKeyId: process.env.MINIO_ACCESS_KEY || process.env.MINIO_ROOT_USER,
+    secretAccessKey: process.env.MINIO_SECRET_KEY || process.env.MINIO_ROOT_PASSWORD,
   },
   forcePathStyle: true, // Required for MinIO
 });
 
 const MINIO_BUCKET = process.env.MINIO_BUCKET || 'sports-images';
-const MINIO_PUBLIC_URL = process.env.MINIO_PUBLIC_URL || process.env.MINIO_ENDPOINT;
+const MINIO_PUBLIC_URL = process.env.MINIO_PUBLIC_URL || process.env.MINIO_ENDPOINT || 'https://minio-production-b44d.up.railway.app';
 
 // Automatically make the bucket public on startup so the frontend can read the images!
 async function ensureBucketExistsAndPublic() {
