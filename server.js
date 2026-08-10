@@ -9,6 +9,8 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (required for Railway and express-rate-limit)
+
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key-change-in-prod';
 
