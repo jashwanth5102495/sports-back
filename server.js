@@ -185,6 +185,11 @@ const Visitor = sequelize.define('Visitor', {
   timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
 });
 
+const SiteContent = sequelize.define('SiteContent', {
+  sectionKey: { type: DataTypes.STRING, unique: true, allowNull: false },
+  content: { type: DataTypes.TEXT, allowNull: false },
+});
+
 // Initialize default admin and server
 async function startServer() {
   if (process.env.DATABASE_URL) {
@@ -198,6 +203,23 @@ async function startServer() {
         const hashedPassword = await bcrypt.hash('admin123', 10);
         await AdminUser.create({ username: 'admin', password: hashedPassword });
         console.log('Default admin user created (admin / admin123)');
+      }
+
+      // Seed default site content if not exists
+      const contentCount = await SiteContent.count();
+      if (contentCount === 0) {
+        await SiteContent.bulkCreate([
+          { sectionKey: 'about_bio', content: "From a backyard rebounder in Spencerport to a national championship at Northwestern and the professional game, Erin Coykendall's career has been built on creativity, preparation and seeing the field differently. Her Northwestern career evolved from elite feeder to complete attacking threat — without losing the unselfish playmaking that made her game unique. Off the field, she is a huge dog lover and proud owner of two dachshunds — Tractor and Lunch Lady." },
+          { sectionKey: 'about_playingStyle', content: "A creative attacker who sees the field differently. Known for her elite lacrosse IQ, exceptional feeding ability, and confidence under pressure." },
+          { sectionKey: 'about_highSchool', content: "Ranked No. 22 by Inside Lacrosse. 3x team captain, 4x First-Team All-County, 2018 First Team All-State, and 2018 Max Preps National Athlete of the Year. Wendy's High School Heisman State Winner & National Finalist. 2018 Divisional/Section/Regional Champions and State Semifinalists." },
+          { sectionKey: 'about_personal', content: "Born in Rochester, N.Y. Parents are Scott and Jennifer Coykendall. Competed for Common Goal Lacrosse. National Honor Society & National Spanish Honor Society Member, and recipient of the Academic Excellence Award." },
+          { sectionKey: 'journey_description', content: "From the time she picked up a lacrosse stick at just 3 years old, Erin's passion for the game was clear. She progressed through youth, club, and high school lacrosse, ultimately becoming one of the most accomplished players in Northwestern University's history. Erin continued pursuing her dream at the professional level, competing in both the AU Pro Lacrosse League and the Women's Lacrosse League, inspiring the next generation of players through her dedication, talent, and love for the game." },
+          { sectionKey: 'achievements_description', content: "A testament to excellence and consistent performance at the highest level of the sport." },
+          { sectionKey: 'featured_year', content: '2026' },
+          { sectionKey: 'featured_title', content: 'Championship Series Winner' },
+          { sectionKey: 'featured_description', content: 'Won the prestigious 2026 Championship series.' },
+        ]);
+        console.log('Default site content seeded.');
       }
     } catch (err) {
       console.error('Error syncing database:', err);
@@ -251,6 +273,31 @@ app.post('/api/track', async (req, res) => {
     res.status(200).send('OK');
   } catch (error) {
     res.status(500).send('Error');
+  }
+});
+
+app.get('/api/site-content', async (req, res) => {
+  try {
+    const content = await SiteContent.findAll();
+    res.status(200).json(content);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/site-content', authenticateToken, async (req, res) => {
+  try {
+    const items = req.body; // Array of { sectionKey, content }
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'Expected an array of { sectionKey, content }' });
+    
+    for (const item of items) {
+      await SiteContent.upsert({ sectionKey: item.sectionKey, content: item.content });
+    }
+    
+    const updated = await SiteContent.findAll();
+    res.status(200).json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
