@@ -223,12 +223,12 @@ async function startServer() {
       ]);
 
       const defaultHeroStats = JSON.stringify([
-        { label: 'POINTS', value: 368 },
-        { label: 'GOALS', value: 171 },
-        { label: 'ASSISTS', value: 197 },
-        { label: 'ALL-AMER', value: 2 },
-        { label: "NAT'L CHAMP", value: 1 },
-        { label: 'ALL-B1G', value: 3 },
+        { label: 'CAREER POINTS', value: 368 },
+        { label: 'CAREER GOALS', value: 171 },
+        { label: 'CAREER ASSISTS', value: 197 },
+        { label: 'ALL-AMERICAN', value: 2 },
+        { label: 'NCAA NATIONAL CHAMPION', value: 1 },
+        { label: 'BIG TEN CHAMPIONSHIPS', value: 3 },
       ]);
 
       const defaultSiteContent = [
@@ -260,6 +260,30 @@ async function startServer() {
           if (!existing) {
             await SiteContent.create(item);
           }
+        }
+      }
+
+      // Migrate existing hero_stats labels to full names if they exist in the database
+      const heroStatsEntry = await SiteContent.findOne({ where: { sectionKey: 'hero_stats' } });
+      if (heroStatsEntry) {
+        try {
+          let parsed = JSON.parse(heroStatsEntry.content);
+          let modified = false;
+          parsed = parsed.map(item => {
+            if (item.label === 'POINTS') { item.label = 'CAREER POINTS'; modified = true; }
+            else if (item.label === 'GOALS') { item.label = 'CAREER GOALS'; modified = true; }
+            else if (item.label === 'ASSISTS') { item.label = 'CAREER ASSISTS'; modified = true; }
+            else if (item.label === 'ALL-AMER') { item.label = 'ALL-AMERICAN'; modified = true; }
+            else if (item.label === "NAT'L CHAMP") { item.label = 'NCAA NATIONAL CHAMPION'; modified = true; }
+            else if (item.label === 'ALL-B1G') { item.label = 'BIG TEN CHAMPIONSHIPS'; modified = true; }
+            return item;
+          });
+          if (modified) {
+            await SiteContent.update({ content: JSON.stringify(parsed) }, { where: { sectionKey: 'hero_stats' } });
+            console.log('Migrated hero stats labels to full names in database.');
+          }
+        } catch (e) {
+          console.error('Error migrating hero stats:', e);
         }
       }
 
