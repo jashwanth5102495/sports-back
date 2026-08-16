@@ -205,21 +205,55 @@ async function startServer() {
         console.log('Default admin user created (admin / admin123)');
       }
 
-      // Seed default site content if not exists
+      const defaultStatistics = JSON.stringify([
+        { label: 'CAREER POINTS', value: 368 },
+        { label: 'CAREER ASSISTS', value: 197 },
+        { label: 'CAREER GOALS', value: 171 },
+        { label: 'NCAA NATIONAL CHAMPION', value: 1 },
+        { label: 'ALL-AMERICAN', value: 2 },
+        { label: 'BIG TEN CHAMPIONSHIPS', value: 3 },
+        { label: 'ESPN SPORTSCENTER TOP 10', value: 4 },
+      ]);
+
+      const defaultHeroStats = JSON.stringify([
+        { label: 'POINTS', value: 368 },
+        { label: 'GOALS', value: 171 },
+        { label: 'ASSISTS', value: 197 },
+        { label: 'ALL-AMER', value: 2 },
+        { label: "NAT'L CHAMP", value: 1 },
+        { label: 'ALL-B1G', value: 3 },
+      ]);
+
+      const defaultSiteContent = [
+        { sectionKey: 'about_bio', content: "From a backyard rebounder in Spencerport to a national championship at Northwestern and the professional game, Erin Coykendall's career has been built on creativity, preparation and seeing the field differently. Her Northwestern career evolved from elite feeder to complete attacking threat — without losing the unselfish playmaking that made her game unique. Off the field, she is a huge dog lover and proud owner of two dachshunds — Tractor and Lunch Lady." },
+        { sectionKey: 'about_playingStyle', content: "A creative attacker who sees the field differently. Known for her elite lacrosse IQ, exceptional feeding ability, and confidence under pressure." },
+        { sectionKey: 'about_highSchool', content: "Ranked No. 22 by Inside Lacrosse. 3x team captain, 4x First-Team All-County, 2018 First Team All-State, and 2018 Max Preps National Athlete of the Year. Wendy's High School Heisman State Winner & National Finalist. 2018 Divisional/Section/Regional Champions and State Semifinalists." },
+        { sectionKey: 'about_personal', content: "Born in Rochester, N.Y. Parents are Scott and Jennifer Coykendall. Competed for Common Goal Lacrosse. National Honor Society & National Spanish Honor Society Member, and recipient of the Academic Excellence Award." },
+        { sectionKey: 'journey_description', content: "From the time she picked up a lacrosse stick at just 3 years old, Erin's passion for the game was clear. She progressed through youth, club, and high school lacrosse, ultimately becoming one of the most accomplished players in Northwestern University's history. Erin continued pursuing her dream at the professional level, competing in both the AU Pro Lacrosse League and the Women's Lacrosse League, inspiring the next generation of players through her dedication, talent, and love for the game." },
+        { sectionKey: 'achievements_description', content: "A testament to excellence and consistent performance at the highest level of the sport." },
+        { sectionKey: 'featured_year', content: '2026' },
+        { sectionKey: 'featured_title', content: 'Championship Series Winner' },
+        { sectionKey: 'featured_description', content: 'Won the prestigious 2026 Championship series.' },
+        { sectionKey: 'statistics', content: defaultStatistics },
+        { sectionKey: 'hero_stats', content: defaultHeroStats },
+        { sectionKey: 'contact_description', content: 'For Skills Sessions, Private Groups, Team Training, Camps/Clinics, and media requests, please use the form or reach out directly.' },
+        { sectionKey: 'contact_email', content: 'erincoykendalllax@gmail.com' },
+        { sectionKey: 'contact_instagram', content: 'https://www.instagram.com/erincoykendall/?hl=en' },
+        { sectionKey: 'events_empty_message', content: 'Updates will be posted here. Check back soon for upcoming events and appearances.' },
+      ];
+
+      // Seed default site content if not exists, and ensure new keys exist for existing installs
       const contentCount = await SiteContent.count();
       if (contentCount === 0) {
-        await SiteContent.bulkCreate([
-          { sectionKey: 'about_bio', content: "From a backyard rebounder in Spencerport to a national championship at Northwestern and the professional game, Erin Coykendall's career has been built on creativity, preparation and seeing the field differently. Her Northwestern career evolved from elite feeder to complete attacking threat — without losing the unselfish playmaking that made her game unique. Off the field, she is a huge dog lover and proud owner of two dachshunds — Tractor and Lunch Lady." },
-          { sectionKey: 'about_playingStyle', content: "A creative attacker who sees the field differently. Known for her elite lacrosse IQ, exceptional feeding ability, and confidence under pressure." },
-          { sectionKey: 'about_highSchool', content: "Ranked No. 22 by Inside Lacrosse. 3x team captain, 4x First-Team All-County, 2018 First Team All-State, and 2018 Max Preps National Athlete of the Year. Wendy's High School Heisman State Winner & National Finalist. 2018 Divisional/Section/Regional Champions and State Semifinalists." },
-          { sectionKey: 'about_personal', content: "Born in Rochester, N.Y. Parents are Scott and Jennifer Coykendall. Competed for Common Goal Lacrosse. National Honor Society & National Spanish Honor Society Member, and recipient of the Academic Excellence Award." },
-          { sectionKey: 'journey_description', content: "From the time she picked up a lacrosse stick at just 3 years old, Erin's passion for the game was clear. She progressed through youth, club, and high school lacrosse, ultimately becoming one of the most accomplished players in Northwestern University's history. Erin continued pursuing her dream at the professional level, competing in both the AU Pro Lacrosse League and the Women's Lacrosse League, inspiring the next generation of players through her dedication, talent, and love for the game." },
-          { sectionKey: 'achievements_description', content: "A testament to excellence and consistent performance at the highest level of the sport." },
-          { sectionKey: 'featured_year', content: '2026' },
-          { sectionKey: 'featured_title', content: 'Championship Series Winner' },
-          { sectionKey: 'featured_description', content: 'Won the prestigious 2026 Championship series.' },
-        ]);
+        await SiteContent.bulkCreate(defaultSiteContent);
         console.log('Default site content seeded.');
+      } else {
+        for (const item of defaultSiteContent) {
+          const existing = await SiteContent.findOne({ where: { sectionKey: item.sectionKey } });
+          if (!existing) {
+            await SiteContent.create(item);
+          }
+        }
       }
     } catch (err) {
       console.error('Error syncing database:', err);
