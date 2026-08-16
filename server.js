@@ -190,6 +190,13 @@ const SiteContent = sequelize.define('SiteContent', {
   content: { type: DataTypes.TEXT, allowNull: false },
 });
 
+const Video = sequelize.define('Video', {
+  title: { type: DataTypes.STRING, allowNull: false },
+  youtubeUrl: { type: DataTypes.STRING, allowNull: false },
+  duration: { type: DataTypes.STRING, defaultValue: '03:00' },
+  featured: { type: DataTypes.BOOLEAN, defaultValue: false }
+});
+
 // Initialize default admin and server
 async function startServer() {
   if (process.env.DATABASE_URL) {
@@ -255,6 +262,32 @@ async function startServer() {
           }
         }
       }
+
+      // Seed default videos if empty
+      const videoCount = await Video.count();
+      if (videoCount === 0) {
+        await Video.bulkCreate([
+          {
+            title: "The Journey to the Final",
+            youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            duration: "12:45",
+            featured: true
+          },
+          {
+            title: "Top 10 Assists of the Season",
+            youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            duration: "04:30",
+            featured: false
+          },
+          {
+            title: "Training Ground Masterclass",
+            youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            duration: "08:15",
+            featured: false
+          }
+        ]);
+        console.log('Default videos seeded.');
+      }
     } catch (err) {
       console.error('Error syncing database:', err);
     }
@@ -319,6 +352,15 @@ app.get('/api/site-content', async (req, res) => {
   }
 });
 
+app.get('/api/videos', async (req, res) => {
+  try {
+    const videos = await Video.findAll({ order: [['featured', 'DESC'], ['createdAt', 'DESC']] });
+    res.status(200).json(videos);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.put('/api/site-content', authenticateToken, async (req, res) => {
   try {
     const items = req.body; // Array of { sectionKey, content }
@@ -345,6 +387,32 @@ app.post('/api/messages', async (req, res) => {
 });
 
 // Protected Content Routes
+app.post('/api/videos', authenticateToken, async (req, res) => {
+  try {
+    const { title, youtubeUrl, duration, featured } = req.body;
+    
+    // If setting as featured, unfeature others
+    if (featured) {
+      await Video.update({ featured: false }, { where: { featured: true } });
+    }
+    
+    const newVideo = await Video.create({ title, youtubeUrl, duration, featured });
+    res.status(201).json(newVideo);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/videos/:id', authenticateToken, async (req, res) => {
+  try {
+    const video = await Video.findByPk(req.params.id);
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+    await video.destroy();
+    res.status(200).json({ success: true, message: 'Video deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 app.post('/api/updates', authenticateToken, async (req, res) => {
   try {
     const payload = { ...req.body };
