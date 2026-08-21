@@ -232,9 +232,9 @@ async function startServer() {
       ]);
 
       const defaultSiteContent = [
-        { sectionKey: 'about_bio', content: "From a backyard rebounder in Spencerport to a national championship at Northwestern and the professional game, Erin Coykendall's career has been built on creativity, preparation and seeing the field differently. Her Northwestern career evolved from elite feeder to complete attacking threat — without losing the unselfish playmaking that made her game unique. Off the field, she is a huge dog lover and proud owner of two dachshunds — Tractor and Lunch Lady." },
-        { sectionKey: 'about_playingStyle', content: "A creative attacker who sees the field differently. Known for her elite lacrosse IQ, exceptional feeding ability, and confidence under pressure." },
-        { sectionKey: 'about_highSchool', content: "Ranked No. 22 by Inside Lacrosse. 3x team captain, 4x First-Team All-County, 2018 First Team All-State, and 2018 Max Preps National Athlete of the Year. Wendy's High School Heisman State Winner & National Finalist. 2018 Divisional/Section/Regional Champions and State Semifinalists." },
+        { sectionKey: 'about_bio', content: "From a backyard rebounder in Spencerport to a national championship at Northwestern and the professional game, Erin Coykendall's career has been built on preparation, creativity, and exceptional understanding of the game.  At Northwestern, she evolved from an elite feeder into a complete attacking threat while maintaining the unselfish playmaking that has always defined her game.  Off the field, she is a lifelong animal lover and proud owner of two dachshunds, Tractor and Lunch Lady.  She also volunteers for animal rescue groups and Operation Caring Hearts, a Rochester, NY non-profit dedicated to supporting individuals experiencing homelessness, including veterans by providing meals, essential supplies, housing assistance and compassionate outreach." },
+        { sectionKey: 'about_playingStyle', content: "An instinctive playmaker with elite lacrosse IQ, exceptional vision, and the ability to create plays under pressure." },
+        { sectionKey: 'about_highSchool', content: "NYS record for career assists: 303, 2nd in NYS for career points: 638. Ranked No. 22 by Inside Lacrosse. 3x team captain, 4x First-Team All-County, 2018 First Team All-State, and 2018 Max Preps National Athlete of the Year. Wendy's High School Heisman State Winner & National Finalist. 2018 Divisional/Section/Regional Champions and State Semifinalists." },
         { sectionKey: 'about_personal', content: "Born in Rochester, N.Y. Parents are Scott and Jennifer Coykendall. Competed for Common Goal Lacrosse. National Honor Society & National Spanish Honor Society Member, and recipient of the Academic Excellence Award." },
         { sectionKey: 'journey_description', content: "From the time she picked up a lacrosse stick at just 3 years old, Erin's passion for the game was clear. She progressed through youth, club, and high school lacrosse, ultimately becoming one of the most accomplished players in Northwestern University's history. Erin continued pursuing her dream at the professional level, competing in both the AU Pro Lacrosse League and the Women's Lacrosse League, inspiring the next generation of players through her dedication, talent, and love for the game." },
         { sectionKey: 'achievements_description', content: "A testament to excellence and consistent performance at the highest level of the sport." },
@@ -243,7 +243,7 @@ async function startServer() {
         { sectionKey: 'featured_description', content: 'Won the prestigious 2026 Championship series.' },
         { sectionKey: 'statistics', content: defaultStatistics },
         { sectionKey: 'hero_stats', content: defaultHeroStats },
-        { sectionKey: 'contact_description', content: 'For Skills Sessions, Private Groups, Team Training, Camps/Clinics, and media requests, please use the form or reach out directly.' },
+        { sectionKey: 'contact_description', content: "For skills sessions, virtual training, private group instruction, team or individual camps/clinics, and media inquiries, please complete the form or contact me directly." },
         { sectionKey: 'contact_email', content: 'erincoykendalllax@gmail.com' },
         { sectionKey: 'contact_instagram', content: 'https://www.instagram.com/erincoykendall/?hl=en' },
         { sectionKey: 'events_empty_message', content: 'Updates will be posted here. Check back soon for upcoming events and appearances.' },
@@ -285,6 +285,29 @@ async function startServer() {
         } catch (e) {
           console.error('Error migrating hero stats:', e);
         }
+      }
+
+      // Update existing database rows with new content requested by the user
+      try {
+        await SiteContent.upsert({
+          sectionKey: 'about_bio',
+          content: "From a backyard rebounder in Spencerport to a national championship at Northwestern and the professional game, Erin Coykendall's career has been built on preparation, creativity, and exceptional understanding of the game.  At Northwestern, she evolved from an elite feeder into a complete attacking threat while maintaining the unselfish playmaking that has always defined her game.  Off the field, she is a lifelong animal lover and proud owner of two dachshunds, Tractor and Lunch Lady.  She also volunteers for animal rescue groups and Operation Caring Hearts, a Rochester, NY non-profit dedicated to supporting individuals experiencing homelessness, including veterans by providing meals, essential supplies, housing assistance and compassionate outreach."
+        });
+        await SiteContent.upsert({
+          sectionKey: 'about_playingStyle',
+          content: "An instinctive playmaker with elite lacrosse IQ, exceptional vision, and the ability to create plays under pressure."
+        });
+        await SiteContent.upsert({
+          sectionKey: 'about_highSchool',
+          content: "NYS record for career assists: 303, 2nd in NYS for career points: 638. Ranked No. 22 by Inside Lacrosse. 3x team captain, 4x First-Team All-County, 2018 First Team All-State, and 2018 Max Preps National Athlete of the Year. Wendy's High School Heisman State Winner & National Finalist. 2018 Divisional/Section/Regional Champions and State Semifinalists."
+        });
+        await SiteContent.upsert({
+          sectionKey: 'contact_description',
+          content: "For skills sessions, virtual training, private group instruction, team or individual camps/clinics, and media inquiries, please complete the form or contact me directly."
+        });
+        console.log('Updated bio, playing style, high school highlights, and contact description in database.');
+      } catch (e) {
+        console.error('Error updating site content in database:', e);
       }
 
       // Seed default videos if empty
